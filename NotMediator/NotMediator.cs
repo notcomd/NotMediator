@@ -7,27 +7,27 @@ class NotMediator : INotMediator
 {
 
     /// <summary>
-    /// 请求处理器
+    ///     请求处理器
     /// </summary>
     private readonly static ConcurrentDictionary<Type, object> _requestHandlers = new();
 
     /// <summary>
-    ///  通知处理器
+    ///     通知处理器
     /// </summary>
     private readonly static ConcurrentDictionary<Type, ConcurrentBag<object>> _notificationHandlers = new();
 
     /// <summary>
-    ///  通知通道
+    ///     通知通道
     /// </summary>
     private readonly static ConcurrentDictionary<Type, Channel<INotifications>> _notificationChannels = new();
 
     /// <summary>
-    ///  处理任务
+    ///     处理任务
     /// </summary>
     private readonly static ConcurrentDictionary<Type, Task> _processingTasks = new();
 
     /// <summary>
-    ///  是否已释放
+    ///     是否已释放
     /// </summary>
     private bool _disposed;
 
@@ -38,7 +38,7 @@ class NotMediator : INotMediator
     }
 
 
-    
+
 
     public async Task<TResponse> SendAsync<TResponse>(IRequest<TResponse> request, CancellationToken cancellationToken = default)
     {
@@ -51,7 +51,7 @@ class NotMediator : INotMediator
         {
             throw new InvalidOperationException($"No handler registered for {requestType}");
         }
-        
+
         var handlerType = typeof(IRequestHandler<,>).MakeGenericType(requestType, typeof(TResponse));
         var handleMethod = handlerType.GetMethod("Handler");
 
