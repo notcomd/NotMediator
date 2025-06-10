@@ -39,15 +39,15 @@ class NotMediator : INotMediator
 
 
 
-/// <summary>
-///     发送请求
-/// </summary>
-/// <param name="request"></param>
-/// <param name="cancellationToken"></param>
-/// <typeparam name="TResponse"></typeparam>
-/// <returns></returns>
-/// <exception cref="ArgumentNullException"></exception>
-/// <exception cref="InvalidOperationException"></exception>
+    /// <summary>
+    ///     发送请求
+    /// </summary>
+    /// <param name="request"></param>
+    /// <param name="cancellationToken"></param>
+    /// <typeparam name="TResponse"></typeparam>
+    /// <returns></returns>
+    /// <exception cref="ArgumentNullException"></exception>
+    /// <exception cref="InvalidOperationException"></exception>
     public async Task<TResponse> SendAsync<TResponse>(IRequest<TResponse> request, CancellationToken cancellationToken = default)
     {
 
@@ -55,11 +55,12 @@ class NotMediator : INotMediator
         if (request == null) throw new ArgumentNullException(nameof(request));
 
         var requestType = request.GetType();
-        
-        if (!_requestHandlers.TryGetValue(requestType, out var handlerObj)) { 
-                throw new InvalidOperationException($"No handler registered for {requestType}");
+
+        if (!_requestHandlers.TryGetValue(requestType, out var handlerObj))
+        {
+            throw new InvalidOperationException($"No handler registered for {requestType}");
         }
-        
+
         var handlerType = typeof(IRequestHandler<,>).MakeGenericType(requestType, typeof(TResponse));
         var handleMethod = handlerType.GetMethod("Handler");
 
@@ -150,11 +151,11 @@ class NotMediator : INotMediator
         handlers.Add(handler);
     }
 
-   /// <summary>
-   /// 获取或创建通知通道
-   /// </summary>
-   /// <param name="notificationType">  </param>
-   /// <returns></returns>
+    /// <summary>
+    ///     获取或创建通知通道
+    /// </summary>
+    /// <param name="notificationType">  </param>
+    /// <returns></returns>
     public Channel<INotifications> GetOrCreateChannel(Type notificationType)
     {
         return _notificationChannels.GetOrAdd(
@@ -162,7 +163,7 @@ class NotMediator : INotMediator
             type =>
             {
                 var channel = Channel.CreateUnbounded<INotifications>();
-                
+
                 var task = ProcessNotificationsAsync(type, channel, CancellationToken.None);
                 _processingTasks[type] = task;
                 return channel;
@@ -183,7 +184,7 @@ class NotMediator : INotMediator
             if (_notificationHandlers.TryGetValue(notification.GetType(), out var notificationHandler))
             {
                 var exceptions = new List<Exception>();
-                
+
                 foreach (var handlerObj in notificationHandler)
                 {
                     try
@@ -212,12 +213,12 @@ class NotMediator : INotMediator
                     throw new AggregateException($"One or more exceptions occurred while processing {notificationType}", exceptions);
                 }
             }
-            
-            
+
+
             if (_notificationHandlers.TryGetValue(notificationType, out var handlers))
             {
                 var exceptions = new List<Exception>();
-                
+
                 foreach (var handlerObj in handlers)
                 {
                     try
@@ -255,7 +256,7 @@ class NotMediator : INotMediator
 
         if (disposing)
         {
-            
+
             foreach (var channel in _notificationChannels.Values)
             {
                 channel.Writer.Complete();
