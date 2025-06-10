@@ -39,7 +39,15 @@ class NotMediator : INotMediator
 
 
 
-
+/// <summary>
+///     发送请求
+/// </summary>
+/// <param name="request"></param>
+/// <param name="cancellationToken"></param>
+/// <typeparam name="TResponse"></typeparam>
+/// <returns></returns>
+/// <exception cref="ArgumentNullException"></exception>
+/// <exception cref="InvalidOperationException"></exception>
     public async Task<TResponse> SendAsync<TResponse>(IRequest<TResponse> request, CancellationToken cancellationToken = default)
     {
 
@@ -47,11 +55,11 @@ class NotMediator : INotMediator
         if (request == null) throw new ArgumentNullException(nameof(request));
 
         var requestType = request.GetType();
-        if (!_requestHandlers.TryGetValue(requestType, out var handlerObj))
-        {
-            throw new InvalidOperationException($"No handler registered for {requestType}");
+        
+        if (!_requestHandlers.TryGetValue(requestType, out var handlerObj)) { 
+                throw new InvalidOperationException($"No handler registered for {requestType}");
         }
-
+        
         var handlerType = typeof(IRequestHandler<,>).MakeGenericType(requestType, typeof(TResponse));
         var handleMethod = handlerType.GetMethod("Handler");
 
@@ -69,7 +77,13 @@ class NotMediator : INotMediator
 
 
 
-    // 发布通知（异步处理，放入 Channel）
+    /// <summary>
+    ///     发布通知
+    /// </summary>
+    /// <param name="notification"></param>
+    /// <param name="cancellationToken"></param>
+    /// <typeparam name="TNotification"></typeparam>
+    /// <exception cref="ArgumentNullException"></exception>
     public async Task PublishAsync<TNotification>(TNotification notification, CancellationToken cancellationToken = default)
         where TNotification : INotifications
     {
@@ -82,26 +96,34 @@ class NotMediator : INotMediator
         await channel.Writer.WriteAsync(notification, cancellationToken);
     }
 
-    // 等待所有通知处理完成
+    /// <summary>
+    ///     等待所有处理任务完成
+    /// </summary>
     public async Task CompleteAsync()
     {
-        // 标记所有通道不再接收新消息
         foreach (var channel in _notificationChannels.Values)
         {
             channel.Writer.Complete();
         }
-        // 等待所有处理任务完成
         await Task.WhenAll(_processingTasks.Values);
     }
 
-    // 资源清理
+    /// <summary>
+    ///     释放资源
+    /// </summary>
     public void Dispose()
     {
         Dispose(true);
         GC.SuppressFinalize(this);
     }
 
-    // 注册请求处理器
+    /// <summary>
+    ///     确保对象没有被释放
+    /// </summary>
+    /// <param name="handler"></param>
+    /// <typeparam name="TRequest"></typeparam>
+    /// <typeparam name="TResponse"></typeparam>
+    /// <exception cref="ArgumentNullException"></exception>
     public void RegisterRequestHandler<TRequest, TResponse>(IRequestHandler<TRequest, TResponse> handler)
         where TRequest : IRequest<TResponse>
     {
@@ -109,7 +131,12 @@ class NotMediator : INotMediator
         _requestHandlers[typeof(TRequest)] = handler ?? throw new ArgumentNullException(nameof(handler));
     }
 
-    // 注册通知处理器
+    /// <summary>
+    ///     注册通知处理器
+    /// </summary>
+    /// <param name="handler"></param>
+    /// <typeparam name="TNotification"></typeparam>
+    /// <exception cref="ArgumentNullException"></exception>
     public void RegisterNotificationHandler<TNotification>(INotificationHandler<TNotification> handler)
         where TNotification : INotifications
     {
@@ -123,7 +150,11 @@ class NotMediator : INotMediator
         handlers.Add(handler);
     }
 
-    // 获取或创建通知通道
+   /// <summary>
+   /// 获取或创建通知通道
+   /// </summary>
+   /// <param name="notificationType">  </param>
+   /// <returns></returns>
     public Channel<INotifications> GetOrCreateChannel(Type notificationType)
     {
         return _notificationChannels.GetOrAdd(
@@ -131,24 +162,62 @@ class NotMediator : INotMediator
             type =>
             {
                 var channel = Channel.CreateUnbounded<INotifications>();
-
-                // 启动处理任务
+                
                 var task = ProcessNotificationsAsync(type, channel, CancellationToken.None);
                 _processingTasks[type] = task;
-
                 return channel;
             });
     }
 
-    // 异步处理通知
+    /// <summary>
+    ///     处理通知
+    /// </summary>
+    /// <param name="notificationType">通知类型</param>
+    /// <param name="channel">通知类型的channel</param>
+    /// <param name="cancellationToken">CancellationToken</param>
+    /// <exception cref="AggregateException"></exception>
     private async Task ProcessNotificationsAsync(Type notificationType, Channel<INotifications> channel, CancellationToken cancellationToken)
     {
         await foreach (var notification in channel.Reader.ReadAllAsync(cancellationToken))
         {
+            if (_notificationHandlers.TryGetValue(notification.GetType(), out var notificationHandler))
+            {
+                var exceptions = new List<Exception>();
+                
+                foreach (var handlerObj in notificationHandler)
+                {
+                    try
+                    {
+                        // 使用反射调用正确的处理方法
+                        var handlerType = typeof(INotificationHandler<>).MakeGenericType(notificationType);
+                        var handleMethod = handlerType.GetMethod("Handler");
+
+                        if (handleMethod != null)
+                        {
+                            var task = (Task)handleMethod.Invoke(handlerObj, new object[]
+                            {
+                                notification, cancellationToken
+                            })!;
+                            await task;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        exceptions.Add(ex);
+                    }
+                }
+
+                if (exceptions.Any())
+                {
+                    throw new AggregateException($"One or more exceptions occurred while processing {notificationType}", exceptions);
+                }
+            }
+            
+            
             if (_notificationHandlers.TryGetValue(notificationType, out var handlers))
             {
                 var exceptions = new List<Exception>();
-
+                
                 foreach (var handlerObj in handlers)
                 {
                     try
@@ -186,14 +255,11 @@ class NotMediator : INotMediator
 
         if (disposing)
         {
-
-            // 完成所有通道
+            
             foreach (var channel in _notificationChannels.Values)
             {
                 channel.Writer.Complete();
             }
-
-            // 等待所有处理任务完成
             try
             {
                 Task.WaitAll(_processingTasks.Values.ToArray());
