@@ -63,6 +63,7 @@ class NotMediator : INotMediator
         var handleMethod = handlerType.GetMethod("Handler");
         if (handleMethod == null)
             throw new InvalidOperationException($"Handler for {requestType} does not implement Handle method correctly");
+        
         var behaviorType = typeof(IPipelineBehavior<,>).MakeGenericType(requestType, typeof(TResponse));
         var behaviors = _serviceProvider.GetServices(behaviorType);
         Func<Task<TResponse>> HandlerDelegate = async () =>
