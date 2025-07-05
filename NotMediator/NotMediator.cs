@@ -55,17 +55,21 @@ class NotMediator : INotMediator
     {
         EnsureNotDisposed();
         if (request == null) throw new ArgumentNullException(nameof(request));
+
         var requestType = request.GetType();
         var handlerType = typeof(IRequestHandler<,>).MakeGenericType(requestType, typeof(TResponse));
-        var handler = _serviceProvider.GetService(handlerType);
-        if (handler == null)
-            throw new InvalidOperationException($"No handler registered for {requestType}");
-        var handleMethod = handlerType.GetMethod("Handler");
-        if (handleMethod == null)
-            throw new InvalidOperationException($"Handler for {requestType} does not implement Handle method correctly");
         
+        using var scope = _serviceProvider.CreateScope();
+        var scopeServiceProvider = scope.ServiceProvider;
+        
+        var handler = scopeServiceProvider.GetService(handlerType)??
+            throw new InvalidOperationException($"No handler registered for {requestType}");
+        
+        var handleMethod = handlerType.GetMethod("Handler")??
+            throw new InvalidOperationException($"Handler for {requestType} does not implement Handle method correctly");
+       
         var behaviorType = typeof(IPipelineBehavior<,>).MakeGenericType(requestType, typeof(TResponse));
-        var behaviors = _serviceProvider.GetServices(behaviorType);
+        var behaviors = scopeServiceProvider.GetServices(behaviorType);
         Func<Task<TResponse>> HandlerDelegate = async () =>
         {
             var result = handleMethod.Invoke(handler, new object[] { request, cancellationToken });

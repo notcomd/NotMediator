@@ -1,5 +1,4 @@
-# 一个通过反射实现了类MediatoR的中介者消息传递类库
-由于平时有使用MediatoR类库来编写代码，当由于编写项目不大，且学习设计模式从而编写了这个简陋的类库供自身项目使用。
+# 一个通过反射实现了简易MediatoR的中介者消息传递类库
 
 这里是使用示例
 ```csharp
@@ -19,10 +18,10 @@ public class TestParendHandler:IRequestHandler<TestParent,string>
     }
 }
 ///管道依赖于请求的实现
-public class LoggerPipeline<TRequest,TResponse>:IPipelineBehavior<TRequest,TResponse>{
+public class LoggerPipeline:IPipelineBehavior<TestParent,string>{
     public Task<TResponse> Handle(TRequest request,Func<Task<TRequest>> next ,CancellationToken cancellationToken)
     {
-      Console.WriteLine($"{request.GetType().Name}");
+      Console.WriteLine($"{nameof(LoggerPipeline)}");
       var result = await next();
       Console.WriteLine($"{result}");
       return result;

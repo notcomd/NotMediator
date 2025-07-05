@@ -6,7 +6,8 @@ public class NotSignalManager
 {
     
     private readonly Dictionary<string, List<Delegate>> _signalHandlers = new();
-
+    
+    //private readonly List<string> _signalNames = new();
     /// <summary>
     /// 绑定信号
     /// </summary>
@@ -88,5 +89,7 @@ public class NotSignalManager
         }
         
     }
-    
+
+   
 }
+
