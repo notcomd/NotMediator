@@ -6,7 +6,8 @@
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
         <Description>简易的中介者实现包</Description>
-        <Copyright>MIT</Copyright>
+        <Copyright>GUN GPLv3.0</Copyright>
+        <PackageLicenseFile>LICENSE.txt</PackageLicenseFile>
         <PackageProjectUrl>https://github.com/notcomd/NotMediator.git</PackageProjectUrl>
         <PackageIcon>4.png</PackageIcon>
         <RepositoryUrl>https://github.com/notcomd/NotMediator.git</RepositoryUrl>
@@ -19,7 +20,8 @@
         <PackageReadmeFile>README.md</PackageReadmeFile>
         <IncludeSymbols>True</IncludeSymbols>
         <SymbolPackageFormat>snupkg</SymbolPackageFormat>
-        <Version>1.0.3</Version>
+        <Version>1.0.4</Version>
+        <PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
     </PropertyGroup>
 
     <ItemGroup>
@@ -28,7 +30,7 @@
         <PackagePath>\</PackagePath>
       </None>
     </ItemGroup>
-
+    
     <ItemGroup>
         <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="9.0.5" />
     </ItemGroup>
