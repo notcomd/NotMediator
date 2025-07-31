@@ -61,8 +61,9 @@ public class TestNotifyHandler:INotificationHandler<TestNotify>{
 需要引入 Microsoft.Extensions.DependencyInjection，NotMediator
 ```csharp
     
-    var services=new ServiceProvider();
+    var services=new ServiceCollection();
     services.AddMediator(Assembly.GetExecutingAssembly());
+    var serviceProvider = services.BuildServiceProvider();
     //管道需要手动注册
     services.AddTransient(typeof(IPipelineBehavior<,>), typeof(LoggerPipeline<,>));
     //获取中介者
