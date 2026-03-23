@@ -5,7 +5,7 @@ namespace NotMediator;
 /// <summary>
 /// 信号管理器实现
 /// </summary>
-public class NotSignalManager : INotSignalManager
+public sealed class NotSignalManager : INotSignalManager
 {
     private readonly Dictionary<string, List<Delegate>> _signalHandlers = new();
     private readonly List<Delegate> _globalListeners = new();
@@ -131,7 +131,7 @@ public class NotSignalManager : INotSignalManager
     /// </summary>
     public void RegisterGlobalListener(IGlobalSignalListener listener)
     {
-        if (listener != null && !_registeredGlobalListeners.Contains(listener))
+        if (listener is not null && !_registeredGlobalListeners.Contains(listener))
         {
             _registeredGlobalListeners.Add(listener);
         }
@@ -171,7 +171,7 @@ public class NotSignalManager : INotSignalManager
     /// <summary>
     /// 触发 SignalEmitted 事件
     /// </summary>
-    protected virtual void OnSignalEmitted(SignalEventArgs e)
+    private void OnSignalEmitted(SignalEventArgs e)
     {
         SignalEmitted?.Invoke(this, e);
     }
