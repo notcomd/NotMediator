@@ -7,9 +7,10 @@
 - ✅ 请求/响应模式（Request/Response）
 - ✅ 通知发布/订阅模式（Publish/Subscribe）
 - ✅ 管道行为支持（Pipeline Behavior）
-- ✅ 信号机制（Signal System）
+- ✅ 信号机制（Signal System）- 支持全局自动注册监听器
 - ✅ 依赖注入集成
 - ✅ 异步操作支持
+- ✅ 接口化设计 - 高可测试性和扩展性
 
 ## 安装
 
@@ -90,32 +91,43 @@ public class LoggingBehavior<TRequest, TResponse> : IPipelineBehavior<TRequest, 
 
 ### 4. 信号机制（Signal System）
 
+#### 基础用法
+
 ```csharp
+using NotMediator;
+
 // 继承 NotSignalObject 基类来使用信号功能
 public class GameSystem : NotSignalObject
 {
     public void Initialize()
     {
-        // 添加全局监听器 - 监听所有信号
+        // 1. 添加全局监听器 - 监听所有信号
         AddGlobalListener((sender, e) => 
         {
             Console.WriteLine($"[全局日志] 信号 '{e.SignalName}' 被触发");
-            Console.WriteLine($"发送者：{e.Sender?.GetType().Name}");
+            Console.WriteLine($"发送者：{e.Sender?.GetType().Name ?? "null"}");
             Console.WriteLine($"数据数量：{e.DataCount}");
+            Console.WriteLine($"时间戳：{e.Timestamp:HH:mm:ss}");
         });
         
-        // 添加特定信号监听器
+        // 2. 添加特定信号监听器
         AddSignalListener("PlayerJoined", (sender, e) => 
         {
             var playerName = e.GetDataAs<string>();
             Console.WriteLine($">>> 玩家 {playerName} 加入了游戏！");
         });
         
-        // 绑定信号处理器
+        // 3. 绑定信号处理器（无参数委托）
         Connect("GameStarted", () => 
         {
             Console.WriteLine("游戏开始了！");
         });
+        
+        // 4. 订阅信号触发事件（事件方式）
+        OnSignalEmitted += (sender, e) =>
+        {
+            Console.WriteLine($"[事件] 检测到信号：{e.SignalName}");
+        };
     }
     
     public void StartGame()
@@ -135,13 +147,116 @@ public class GameSystem : NotSignalObject
         // 触发信号（多个参数）
         EmitSignal("Combat", attacker, defender, damage);
     }
+    
+    public void RemoveListeners()
+    {
+        // 移除监听器
+        RemoveGlobalListener(/* 监听器引用 */);
+        RemoveSignalListener("PlayerJoined", /* 监听器引用 */);
+    }
 }
 
 // 使用示例
 var gameSystem = new GameSystem();
 gameSystem.Initialize();
-gameSystem.PlayerJoin("张三");  // 输出：>>> 玩家 张三 加入了游戏！
-gameSystem.StartGame();          // 输出：游戏开始了！
+
+gameSystem.PlayerJoin("张三");  
+// 输出:
+// [全局日志] 信号 'PlayerJoined' 被触发
+// 发送者：GameSystem
+// 数据数量：1
+// 时间戳：10:30:45
+// >>> 玩家 张三 加入了游戏！
+// [事件] 检测到信号：PlayerJoined
+
+gameSystem.StartGame();          
+// 输出:
+// [全局日志] 信号 'GameStarted' 被触发
+// 游戏开始了！
+// [事件] 检测到信号：GameStarted
+```
+
+#### 高级用法：全局信号监听器（自动注册）
+
+通过依赖注入自动注册全局监听器，所有通过工厂创建的信号对象都会自动应用这些监听器：
+
+```csharp
+using Microsoft.Extensions.DependencyInjection;
+using NotMediator;
+
+// 1. 定义自定义全局监听器
+public class GlobalLoggingListener : IGlobalSignalListener
+{
+    private readonly string _prefix;
+    
+    public GlobalLoggingListener(string prefix = "[信号日志]")
+    {
+        _prefix = prefix;
+    }
+    
+    public Task OnSignalEmittedAsync(object? sender, SignalEventArgs e)
+    {
+        Console.WriteLine($"{_prefix} [{e.Timestamp:HH:mm:ss}] 信号：{e.SignalName}");
+        Console.WriteLine($"{_prefix}   发送者：{sender?.GetType().Name ?? "null"}");
+        
+        if (e.DataCount > 0)
+        {
+            var dataStr = string.Join(", ", e.SignalData.Select(d => d?.ToString() ?? "null"));
+            Console.WriteLine($"{_prefix}   数据 ({e.DataCount}): {dataStr}");
+        }
+        
+        return Task.CompletedTask; // 异步处理，不阻塞主流程
+    }
+}
+
+// 2. 配置依赖注入
+var services = new ServiceCollection();
+
+// 自动扫描并注册所有全局监听器
+services.AddNotMediatorWithGlobalSignalListeners(typeof(Program).Assembly);
+
+// 或者手动注册特定的全局监听器
+services.AddSingleton<IGlobalSignalListener>(new GlobalLoggingListener("[日志]"));
+services.AddSingleton<IGlobalSignalListener>(new GlobalSignalAuditListener(storeInMemory: true));
+
+var serviceProvider = services.BuildServiceProvider();
+
+// 3. 初始化信号对象工厂
+SignalObjectFactory.Initialize(serviceProvider);
+
+// 4. 创建信号对象（自动应用所有已注册的全局监听器）
+var gameSystem = SignalObjectFactory.Create<GameSystem>();
+gameSystem.Initialize();
+
+// 现在触发信号时，全局监听器会自动被调用
+gameSystem.PlayerJoin("李四");
+// 输出示例:
+// [日志] [10:30:45] 信号：PlayerJoined
+// [日志]   发送者：GameSystem
+// [日志]   数据 (1): 李四
+// >>> 玩家 李四 加入了游戏！
+```
+
+**内置全局监听器：**
+- `GlobalSignalLoggingListener` - 自动记录所有信号触发（可自定义前缀）
+- `GlobalSignalAuditListener` - 审计追踪，可查询历史记录
+
+```csharp
+// 使用内置监听器
+services.AddSingleton<IGlobalSignalListener>(
+    new GlobalSignalLoggingListener("[我的日志]")
+);
+
+// 审计监听器（支持内存存储）
+var auditListener = new GlobalSignalAuditListener(storeInMemory: true);
+services.AddSingleton<IGlobalSignalListener>(auditListener);
+
+// 后续可以获取审计记录
+var records = auditListener.GetAuditRecords();
+foreach (var record in records)
+{
+    Console.WriteLine($"[{record.Timestamp}] {record.SignalName}");
+}
 ```
 
 #### SignalEventArgs API
@@ -164,42 +279,125 @@ public class SignalEventArgs : EventArgs
 }
 ```
 
-#### 高级信号功能
+#### INotSignalManager 接口
+
+信号管理器已接口化，支持 Mock 和扩展：
 
 ```csharp
-public class AdvancedSignalExample : NotSignalObject
+public interface INotSignalManager
 {
-    public void Setup()
+    event EventHandler<SignalEventArgs>? SignalEmitted;
+    void Connect(string signalName, Delegate handler);
+    void Disconnect(string signalName, Delegate handler);
+    void Emit(string signalName, params object[] signalData);
+    void Emit(string signalName, object? sender, params object[] signalData);
+    void AddGlobalListener(EventHandler<SignalEventArgs> listener);
+    void RemoveGlobalListener(EventHandler<SignalEventArgs> listener);
+    void RegisterGlobalListener(IGlobalSignalListener listener);
+    void AddSignalListener(string signalName, EventHandler<SignalEventArgs> listener);
+    void RemoveSignalListener(string signalName, EventHandler<SignalEventArgs> listener);
+}
+```
+
+#### 实战示例：完整的信号系统应用
+
+```csharp
+using NotMediator;
+using Microsoft.Extensions.DependencyInjection;
+
+// 场景 1: 简单的游戏事件系统
+public class GameEventManager : NotSignalObject
+{
+    public void SetupListeners()
     {
-        // 1. 全局监听器 - 监听所有信号
-        AddGlobalListener(OnGlobalSignal);
+        // 监听玩家升级信号
+        AddSignalListener("PlayerLevelUp", (sender, e) =>
+        {
+            var playerId = e.GetData<int>(0);
+            var newLevel = e.GetData<int>(1);
+            Console.WriteLine($"玩家 {playerId} 升级到 {newLevel} 级！");
+        });
         
-        // 2. 特定信号监听器 - 只监听指定信号
-        AddSignalListener("CriticalEvent", OnCriticalEvent);
-        
-        // 3. 订阅信号触发事件
-        OnSignalEmitted(OnAnySignalEmitted);
-        
-        // 4. 移除监听器
-        // RemoveGlobalListener(OnGlobalSignal);
-        // RemoveSignalListener("CriticalEvent", OnCriticalEvent);
+        // 监听物品拾取信号
+        AddSignalListener("ItemPickedUp", (sender, e) =>
+        {
+            var item = e.GetDataAs<Item>();
+            Console.WriteLine($"拾取物品：{item?.Name}");
+        });
     }
     
-    private void OnGlobalSignal(object? sender, SignalEventArgs e)
+    public void PlayerLevelUp(int playerId, int newLevel)
     {
-        Console.WriteLine($"监听到信号：{e.SignalName}");
+        EmitSignal("PlayerLevelUp", playerId, newLevel);
     }
     
-    private void OnCriticalEvent(object? sender, SignalEventArgs e)
+    public void PickItem(Item item)
     {
-        Console.WriteLine($"关键事件：{e.SignalName}");
+        EmitSignal("ItemPickedUp", item);
+    }
+}
+
+// 场景 2: 使用全局监听器进行日志记录和性能监控
+public class PerformanceMonitorListener : IGlobalSignalListener
+{
+    private readonly Dictionary<string, List<long>> _signalTimings = new();
+    
+    public Task OnSignalEmittedAsync(object? sender, SignalEventArgs e)
+    {
+        // 记录信号触发频率
+        if (!_signalTimings.ContainsKey(e.SignalName))
+        {
+            _signalTimings[e.SignalName] = new List<long>();
+        }
+        _signalTimings[e.SignalName].Add(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
+        
+        // 输出统计信息
+        var count = _signalTimings[e.SignalName].Count;
+        Console.WriteLine($"[性能监控] 信号 {e.SignalName} 已被触发 {count} 次");
+        
+        return Task.CompletedTask;
     }
     
-    private void OnAnySignalEmitted(object? sender, SignalEventArgs e)
+    public void PrintStatistics()
     {
-        // 记录所有信号的历史
-        Console.WriteLine($"[{e.Timestamp}] {e.SignalName}");
+        foreach (var kvp in _signalTimings)
+        {
+            Console.WriteLine($"信号 '{kvp.Key}' 触发次数：{kvp.Value.Count}");
+        }
     }
+}
+
+// 场景 3: 结合依赖注入的完整应用
+public class Program
+{
+    public static async Task Main()
+    {
+        // 配置服务
+        var services = new ServiceCollection();
+        
+        // 注册所有功能（包括全局监听器）
+        services.AddNotMediatorWithGlobalSignalListeners(typeof(Program).Assembly);
+        
+        // 注册自定义监听器
+        services.AddSingleton<IGlobalSignalListener>(new PerformanceMonitorListener());
+        services.AddSingleton<IGlobalSignalListener>(new GlobalSignalLoggingListener());
+        
+        var serviceProvider = services.BuildServiceProvider();
+        SignalObjectFactory.Initialize(serviceProvider);
+        
+        // 创建并使用
+        var gameManager = SignalObjectFactory.Create<GameEventManager>();
+        gameManager.SetupListeners();
+        
+        // 触发信号
+        gameManager.PlayerLevelUp(1, 5);
+        gameManager.PickItem(new Item { Name = "宝剑" });
+    }
+}
+
+public class Item
+{
+    public string Name { get; set; } = string.Empty;
 }
 ```
 
@@ -209,6 +407,9 @@ public class AdvancedSignalExample : NotSignalObject
 - 🔍 **完整的上下文信息** - 包含信号名称、发送者、时间戳等
 - 🛡️ **异常隔离** - 单个监听器异常不影响其他监听器
 - 🔄 **类型安全** - 提供 `GetDataAs<T>()` 进行类型转换
+- ⚡ **异步处理** - 全局监听器异步调用，不阻塞主流程
+- 🔧 **接口化设计** - `INotSignalManager` 接口支持 Mock 和单元测试
+- 🚀 **自动注册** - 通过 DI 自动注册全局监听器到所有信号对象
 
 ## 依赖注入配置
 
@@ -223,8 +424,14 @@ builder.Services.AddNotMediator(Assembly.GetExecutingAssembly());
 // 如果需要自动注册管道行为
 builder.Services.AddNotMediatorWithPipelineBehaviors(Assembly.GetExecutingAssembly());
 
+// 自动注册全局信号监听器（推荐）
+builder.Services.AddNotMediatorWithGlobalSignalListeners(Assembly.GetExecutingAssembly());
+
 // 或者手动注册特定管道
 builder.Services.AddTransient(typeof(IPipelineBehavior<,>), typeof(LoggingBehavior<,>));
+
+// 手动注册全局监听器
+builder.Services.AddSingleton<IGlobalSignalListener>(new GlobalSignalLoggingListener());
 ```
 
 ### 控制台应用中使用
@@ -235,17 +442,20 @@ using System.Reflection;
 
 var services = new ServiceCollection();
 
-// 注册 NotMediator
-services.AddNotMediator(Assembly.GetExecutingAssembly());
-
-// 手动注册管道（如果需要）
-services.AddTransient(typeof(IPipelineBehavior<,>), typeof(LoggingBehavior<,>));
+// 注册 NotMediator 和全局信号监听器
+services.AddNotMediatorWithGlobalSignalListeners(Assembly.GetExecutingAssembly());
 
 // 构建服务提供者
 var serviceProvider = services.BuildServiceProvider();
 
+// 初始化信号对象工厂
+SignalObjectFactory.Initialize(serviceProvider);
+
 // 获取中介者实例
 var mediator = serviceProvider.GetService<INotMediator>();
+
+// 创建信号对象（自动应用全局监听器）
+var gameSystem = SignalObjectFactory.Create<GameSystem>();
 ```
 
 ## 使用示例
@@ -313,6 +523,9 @@ mediator.Dispose();
 - `INotifications` - 通知接口
 - `INotificationHandler<TNotifications>` - 通知处理器接口
 - `IPipelineBehavior<TRequest, TResponse>` - 管道行为接口
+- `INotSignalManager` - 信号管理器接口（接口化设计，支持 Mock）
+- `IGlobalSignalListener` - 全局信号监听器接口（自动注册）
+- `SignalEventArgs` - 信号事件参数
 
 ## 高级用法
 
