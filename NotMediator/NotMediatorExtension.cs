@@ -13,9 +13,8 @@ public static class NotMediatorExtension
     /// <returns>服务集合，支持链式调用。</returns>
     public static IServiceCollection AddNotMediator(this IServiceCollection services, params Assembly[] assemblies)
     {
-        
         services.AddSingleton<INotMediator, NotMediator>(sp => new NotMediator(sp));
-       
+
         foreach (var type in assemblies.SelectMany(a => a.GetTypes()))
         {
             foreach (var handlerInterface in type.GetInterfaces())
@@ -30,6 +29,29 @@ public static class NotMediatorExtension
                 }
             }
         }
+
         return services;
     }
+
+    public static IServiceCollection AddNotMediatorWithPipelineBehaviors(
+        this IServiceCollection services,
+        params Assembly[] assemblies)
+    {
+        services.AddNotMediator(assemblies);
+
+        foreach (var type in assemblies.SelectMany(a => a.GetTypes()))
+        {
+            foreach (var behaviorInterface in type.GetInterfaces())
+            {
+                if (behaviorInterface.IsGenericType &&
+                    behaviorInterface.GetGenericTypeDefinition() == typeof(IPipelineBehavior<,>))
+                {
+                    services.AddTransient(behaviorInterface, type);
+                }
+            }
+        }
+
+        return services;
+    }
+
 }

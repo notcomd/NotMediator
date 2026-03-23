@@ -70,23 +70,23 @@ class NotMediator : INotMediator
        
         var behaviorType = typeof(IPipelineBehavior<,>).MakeGenericType(requestType, typeof(TResponse));
         var behaviors = scopeServiceProvider.GetServices(behaviorType);
-        Func<Task<TResponse>> HandlerDelegate = async () =>
+        Func<Task<TResponse>> handlerDelegate = async () =>
         {
-            var result = handleMethod.Invoke(handler, new object[] { request, cancellationToken });
+            var result = handleMethod.Invoke(handler, [request, cancellationToken]);
             return await (Task<TResponse>)result!;
         };
 
         foreach (var behavior in behaviors)
         {
-            var next = HandlerDelegate;
-            HandlerDelegate = async () =>
+            var next = handlerDelegate;
+            handlerDelegate = async () =>
             {
                 var method = behaviorType.GetMethod("Handler");
                 if (method is null) throw new InvalidOperationException($"Behavior {request} does not implement Handler method correctly");
-                return await (Task<TResponse>)method.Invoke(behavior, new object[] { request, next, cancellationToken })!;
+                return await (Task<TResponse>)method.Invoke(behavior, [request, next, cancellationToken])!;
             };
         }
-        return await HandlerDelegate();
+        return await handlerDelegate();
     }
 
     /// <summary>
@@ -191,7 +191,7 @@ class NotMediator : INotMediator
                     var handleMethod = handlerType.GetMethod("Handler");
                     if (handleMethod != null)
                     {
-                        var task = (Task)handleMethod.Invoke(handler, new object[] { notification, cancellationToken })!;
+                        var task = (Task)handleMethod.Invoke(handler, [notification, cancellationToken])!;
                         await task;
                     }
                 }
