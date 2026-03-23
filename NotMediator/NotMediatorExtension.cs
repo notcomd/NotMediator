@@ -1,4 +1,4 @@
-﻿using System.Reflection;
+using System.Reflection;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace NotMediator;
@@ -51,6 +51,36 @@ public static class NotMediatorExtension
             }
         }
 
+        return services;
+    }
+    
+    /// <summary>
+    /// 注册 NotMediator、处理器、管道行为以及全局信号监听器。
+    /// 此方法会自动扫描并注册所有实现了 <see cref="IGlobalSignalListener"/> 的类型。
+    /// </summary>
+    /// <param name="services">服务集合</param>
+    /// <param name="assemblies">需要扫描的程序集，用于自动发现处理器、管道行为和信号监听器。</param>
+    /// <returns>服务集合，支持链式调用。</returns>
+    /// <remarks>
+    /// 此方法会在 DI 容器中注册所有找到的全局信号监听器，它们会自动应用到所有 NotSignalObject 实例。
+    /// 全局信号监听器可用于实现日志记录、审计、监控等横切关注点。
+    /// </remarks>
+    public static IServiceCollection AddNotMediatorWithGlobalSignalListeners(
+        this IServiceCollection services,
+        params Assembly[] assemblies)
+    {
+        services.AddNotMediatorWithPipelineBehaviors(assemblies);
+        
+        // 自动注册所有实现了 IGlobalSignalListener 的类
+        foreach (var type in assemblies.SelectMany(a => a.GetTypes()))
+        {
+            if (!type.IsAbstract && !type.IsInterface && 
+                type.GetInterfaces().Contains(typeof(IGlobalSignalListener)))
+            {
+                services.AddSingleton<IGlobalSignalListener>(sp => (IGlobalSignalListener)Activator.CreateInstance(type)!);
+            }
+        }
+        
         return services;
     }
 

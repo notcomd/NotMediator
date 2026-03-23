@@ -1,9 +1,33 @@
-﻿namespace NotMediator;
+using Microsoft.Extensions.DependencyInjection;
+
+namespace NotMediator;
 
 public abstract class NotSignalObject
 {
     
     protected readonly NotSignalManager NotSignalManager= new NotSignalManager();
+    
+    /// <summary>
+    /// 标记是否已初始化全局监听器
+    /// </summary>
+    private bool _globalListenersInitialized = false;
+    
+    /// <summary>
+    /// 初始化全局监听器（从服务提供者获取并注册）
+    /// </summary>
+    /// <param name="serviceProvider">服务提供者</param>
+    internal void InitializeGlobalListeners(IServiceProvider serviceProvider)
+    {
+        if (!_globalListenersInitialized)
+        {
+            var listeners = serviceProvider.GetServices<IGlobalSignalListener>();
+            foreach (var listener in listeners)
+            {
+                NotSignalManager.RegisterGlobalListener(listener);
+            }
+            _globalListenersInitialized = true;
+        }
+    }
     
     
     public void Connect(string signalName, Delegate handler)

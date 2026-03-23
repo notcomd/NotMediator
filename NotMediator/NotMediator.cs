@@ -5,7 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace NotMediator;
 
-class NotMediator : INotMediator
+public class  NotMediator : INotMediator
 {
     /// <summary>
     /// 服务提供者，用于获取依赖项。
